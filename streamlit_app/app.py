@@ -2,89 +2,110 @@ import streamlit as st
 import requests
 import pandas as pd
 
-API_URL = "https://taskflow-proj.onrender.com"
+API_URL = "https://taskflow-proj.onrender.com/items" 
 
-st.set_page_config(page_title="TaskFlow AI", page_icon="👑", layout="wide")
+st.set_page_config(page_title="TaskFlow ", page_icon="👑", layout="wide")
+
+def get_tasks():
+    """Puxa todas as tarefas da API"""
+    try:
+        response = requests.get(f"{API_URL}/") 
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, list):
+                return data
+            else:
+                st.error("A API retornou um formato inesperado.")
+                return []
+        else:
+            st.error("Erro ao buscar tarefas do banco de dados.")
+            return []
+    except requests.exceptions.ConnectionError:
+        st.error("Não foi possível conectar à API. Verifique se o Uvicorn ou o Render estão rodando.")
+        return []
+
+def create_task(data):
+    """Envia uma nova tarefa para a API"""
+    try:
+        response = requests.post(f"{API_URL}/", json=data)
+        return response.status_code in [200, 201]
+    except Exception as e:
+        st.error(f"Erro ao criar tarefa: {e}")
+        return False
+
+def delete_task(task_id):
+    """Deleta uma tarefa específica via API"""
+    try:
+        response = requests.delete(f"{API_URL}/{task_id}")
+        return response.status_code == 200
+    except Exception as e:
+        st.error(f"Erro ao deletar tarefa: {e}")
+        return False
 
 st.title("👑 TaskFlow Analytics")
-st.write("Sistema Inteligente de Gestão e Produtividade.")
-
-
-st.header("Adicionar Nova Tarefa")
-with st.form("new_task_form"):
-    col1, col2 = st.columns(2)
-    with col1:
-        title = st.text_input("Título da Tarefa")
-        priority = st.selectbox("Prioridade", ["Alta", "Média", "Baixa"])
-    with col2:
-        status = st.selectbox("Status", ["Pendente", "Em Andamento", "Concluída"])
-    
-    description = st.text_area("Descrição (Opcional)")
-    
-    submitted = st.form_submit_button("Salvar Tarefa")
-    
-    if submitted:
-        if title:
-            payload = {
-                "title": title,
-                "description": description,
-                "priority": priority,
-                "status": status
-            }
-            try:
-                response = requests.post(API_URL, json=payload)
-                if response.status_code in [200, 201]:
-                    st.success("Tarefa criada com sucesso!")
-                else:
-                    st.error(f"Erro ao criar tarefa: {response.text}")
-            except Exception as e:
-                st.error(f"Erro de conexão com a API: {e}")
-        else:
-            st.warning("O título da tarefa é obrigatório!")
-
+st.markdown("Sistema Inteligente de Gestão e Produtividade.")
 st.divider()
 
-st.header("Dashboard de Produtividade")
+col1, col2 = st.columns([1, 2])
 
-col_atualizar, _ = st.columns([1, 5])
-with col_atualizar:
-    if st.button("Atualizar Dados 🔄"):
-        pass
+with col1:
+    st.header("Nova Tarefa")
+    with st.form("form_nova_tarefa", clear_on_submit=True):
+        titulo = st.text_input("Título da Tarefa *")
+        descricao = st.text_area("Descrição (Opcional)")
+        prioridade = st.selectbox("Prioridade", ["Alta", "Média", "Baixa"])
+        status = st.selectbox("Status", ["Pendente", "Em Andamento", "Concluída"])
+        
+        submit = st.form_submit_button("Adicionar Tarefa ➕")
+        
+        if submit:
+            if not titulo:
+                st.warning("O título é obrigatório!")
+            else:
+                nova_tarefa = {
+                    "title": titulo,
+                    "description": descricao,
+                    "priority": prioridade,
+                    "status": status
+                }
+                if create_task(nova_tarefa):
+                    st.success("Tarefa adicionada com sucesso!")
+                    st.rerun() 
 
-try:
-    response = requests.get(API_URL)
+with col2:
+    st.header("Dashboard de Produtividade")
     
-    if response.status_code == 200:
-        tasks = response.json()
+    tarefas = get_tasks()
+    
+
+    if tarefas:
+        df = pd.DataFrame(tarefas)
         
-        if tasks:
-            df = pd.DataFrame(tasks)
-            
-            col_met1, col_met2, col_met3 = st.columns(3)
-            col_met1.metric("Total de Tarefas", len(df))
-            col_met2.metric("Concluídas ✅", len(df[df['status'] == 'Concluída']))
-            col_met3.metric("Pendentes ⏳", len(df[df['status'] == 'Pendente']))
-            
-            st.subheader("Análise Visual")
-            col_graf1, col_graf2 = st.columns(2)
-            
-            with col_graf1:
-                st.write("Distribuição por Status")
-                status_counts = df['status'].value_counts()
-                st.bar_chart(status_counts, color="#22c55e")
-                
-            with col_graf2:
-                st.write("Distribuição por Prioridade")
-                priority_counts = df['priority'].value_counts()
-                st.bar_chart(priority_counts, color="#3b82f6")
-            
-            st.subheader("Histórico de Tarefas")
-            st.dataframe(df[['id', 'title', 'priority', 'status', 'created_at']], use_container_width=True)
-            
-        else:
-            st.info("Nenhuma tarefa cadastrada ainda. Use o formulário acima para começar!")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total", len(df))
+        m2.metric("Concluídas ✅", len(df[df['status'] == 'Concluída']))
+        m3.metric("Pendentes ⏳", len(df[df['status'] != 'Concluída']))
+        
+        st.write("### Suas Tarefas")
+        st.dataframe(
+            df[['id', 'title', 'priority', 'status']], 
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.write("### Gerenciar Tarefas")
+        del_col1, del_col2 = st.columns([3, 1])
+        with del_col1:
+            opcoes_delete = {f"{t['id']} - {t['title']}": t['id'] for t in tarefas}
+            tarefa_para_deletar = st.selectbox("Selecione uma tarefa para remover:", options=list(opcoes_delete.keys()))
+        
+        with del_col2:
+            st.write("") 
+            st.write("")
+            if st.button("Deletar 🗑️", type="primary"):
+                id_alvo = opcoes_delete[tarefa_para_deletar]
+                if delete_task(id_alvo):
+                    st.success("Tarefa removida!")
+                    st.rerun()
     else:
-        st.error("Falha ao buscar dados da API.")
-        
-except Exception as e:
-    st.error(f"A API não está respondendo. Certifique-se de que o Uvicorn/Render está rodando. Detalhes do erro: {e}")
+        st.info("Nenhuma tarefa encontrada. Comece adicionando uma ao lado!")
