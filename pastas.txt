@@ -1,0 +1,13 @@
+
+mkdir -p app/models app/schemas app/routers app/config streamlit_app
+
+# 2. Cria os arquivos do Backend (FastAPI)
+touch app/__init__.py app/main.py
+touch app/config/__init__.py app/config/database.py
+touch app/models/__init__.py app/models/item_model.py
+touch app/schemas/__init__.py app/schemas/item_schema.py
+touch app/routers/__init__.py app/routers/item_router.py
+
+# 3. Cria os arquivos do Frontend (Streamlit) e configurações de Deploy
+touch streamlit_app/app.py
+touch requirements.txt README.md .gitignore .env
